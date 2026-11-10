@@ -1,6 +1,8 @@
+using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using System.Collections.Generic;
+using static UnityEngine.GraphicsBuffer;
 
 public class PlayerScript : MonoBehaviour
 {
@@ -24,7 +26,7 @@ public class PlayerScript : MonoBehaviour
     [SerializeField] List<Transform> obstacles;
 
     private GameObject myTarget;
-    private Vector3 wanderTarget;
+    private Vector3 wanderTarget = Vector3.zero;
     private Vector3 steering;
     private Vector3 desired;
     private LineRenderer lineyVelocity;
@@ -70,16 +72,38 @@ public class PlayerScript : MonoBehaviour
     {
         steering = Vector3.zero;
 
-        if(Keyboard.current.sKey.wasPressedThisFrame){
+        if(Keyboard.current.aKey.wasPressedThisFrame){
             active = !active;
         }
 
         if(active){
             //Compute steering vector
             Debug.Log("Using steering");
-            steering = Seek(myTarget.transform.position);
+            //steering = Seek(myTarget.transform.position);
+
+            //steering = Flee(myTarget.transform.position);
+
+            /*
+            steering = Pursue(
+                myTarget.transform, 
+                myTarget.GetComponent<TargetScript>().velocity);
+            */
+
+            /*
+            steering = Evade(
+                myTarget.transform,
+                myTarget.GetComponent<TargetScript>().velocity,
+                predictionTime);
+            */
+
+            //steering = Wander();
+
+            //steering = Hide(myTarget.transform, obstacles);
+
+            steering = Hide(myTarget.transform, obstacles) * 0.5f + Flee(myTarget.transform.position) * 0.5f;
+
         }
-        
+
         velocity += steering * Time.deltaTime;
         velocity = Vector3.ClampMagnitude(velocity, speed);
 
@@ -93,40 +117,84 @@ public class PlayerScript : MonoBehaviour
 
     Vector3 Seek(Vector3 targetPos)
     {
-        //TODO
-        return Vector3.zero;
-    }
+
+        //Obtener el seek dir o desired
+        desired = (targetPos - transform.position).normalized * speed;
+        Vector3 steering = desired - velocity;
+        return Vector3.ClampMagnitude(steering, maxForce);
+    }   
 
 
     Vector3 Flee(Vector3 targetPos)
     {
-        //TODO
-        return Vector3.zero;
+        desired = (transform.position - targetPos).normalized * speed;
+        Vector3 steering = desired - velocity;
+        return Vector3.ClampMagnitude(steering, maxForce);
     }
 
-    Vector3 Pursue(Transform target)
+    Vector3 Pursue(Transform target, Vector3 velocity)
     {
-        //TODO
-        return Vector3.zero;
+
+        float distance = Vector3.Distance(target.position, transform.position);
+
+        float newT = distance / speed;
+
+        Vector3 futurePosition = target.position + velocity * newT;
+
+        return Seek(futurePosition);
+        
     }
 
-    Vector3 Evade(Transform target)
+    Vector3 Evade(Transform target, Vector3 velocity, float t)
     {
-        //TODO
-        return Vector3.zero;
+        float distance = Vector3.Distance(target.position, transform.position);
+
+        float newT = distance / speed;
+
+        Vector3 futurePosition = target.position + velocity * newT;
+
+        return Flee(futurePosition);
     }
 
 
     Vector3 Wander()
     {
-        //TODO
-        return Vector3.zero;
+        wanderTarget += new Vector3(
+            Random.Range(-1, 1) * wanderJitter,
+            Random.Range(-1, 1) * wanderJitter,
+            0
+            );
+
+        wanderTarget = wanderTarget.normalized * wanderRadius;
+
+        Vector3 targetPos = transform.position + velocity * wanderDistance + wanderTarget;
+
+        return Seek(targetPos);
     }
 
     Vector3 Hide(Transform target, List<Transform> obstacles)
     {
-        //TODO
-        return Vector3.zero;
+        float closestDist = Mathf.Infinity;
+        Vector3 bestObstacle = Vector3.zero;
+
+        foreach (Transform t in obstacles)
+        {
+            float dist = Vector3.Distance(transform.position, t.position);
+
+
+            if(dist < closestDist)
+            {
+                closestDist = dist;
+                bestObstacle = t.position;
+            }
+        }
+
+        if(closestDist == Mathf.Infinity)
+        {
+            return Flee(target.position);
+        }
+
+        return Seek(bestObstacle);
     }
 
      void DrawVelocityAndSteering()
